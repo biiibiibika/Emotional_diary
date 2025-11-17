@@ -1,0 +1,256 @@
+import sys
+import sqlite3
+from datetime import datetime, timedelta
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
+                             QHBoxLayout, QPushButton, QLabel, QTextEdit, 
+                             QComboBox, QSpinBox, QDateEdit, QTimeEdit,
+                             QStackedWidget, QListWidget, QMessageBox, QTabWidget)
+from PyQt6.QtCore import QDate, QTime, Qt
+from PyQt6.QtGui import QAction, QIcon
+
+# ДОРАБОТАТЬ: Импорт UI файлов из Qt Designer
+# from MainWindow_ui import Ui_MainWindow
+# from DateTimeStep_ui import Ui_DateTimeStep
+# from MoodStep_ui import Ui_MoodStep
+# from ReasonStep_ui import Ui_ReasonStep
+# from CommentStep_ui import Ui_CommentStep  
+# from RatingStep_ui import Ui_RatingStep
+
+class DatabaseManager:
+    """Менеджер базы данных - ОСНОВНАЯ ЧАСТЬ ПРОЕКТА"""
+    def __init__(self):
+        self.conn = sqlite3.connect('emotional_diary.db')
+        self.create_tables()
+    
+    def create_tables(self):
+        """Создание таблиц"""
+        cursor = self.conn.cursor()
+        
+        # ДОРАБОТАТЬ: Добавить индексы для оптимизации запросов
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS mood_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT NOT NULL,
+                time TEXT NOT NULL,
+                mood TEXT NOT NULL,
+                reason TEXT,
+                comment TEXT,
+                rating INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS advice_templates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                mood TEXT NOT NULL,
+                advice_text TEXT NOT NULL
+            )
+        ''')
+        
+        self.initialize_advice_templates()
+        self.conn.commit()
+    
+    def initialize_advice_templates(self):
+        """Инициализация советов - ДОРАБОТАТЬ: больше вариантов советов"""
+        cursor = self.conn.cursor()
+        
+        cursor.execute("SELECT COUNT(*) FROM advice_templates")
+        if cursor.fetchone()[0] == 0:
+            advice_data = [
+                ('happy', 'Продолжайте в том же духе! Вы большой молодец!'),
+                ('sad', 'Погуляйте на свежем воздухе'),
+                ('tired', 'Выспитесь'),
+                ('angry', 'Побейте подушку'),
+                ('neutral', 'Испытайте новые эмоции!')
+            ]
+            
+            cursor.executemany(
+                "INSERT INTO advice_templates (mood, advice_text) VALUES (?, ?)",
+                advice_data
+            )
+            self.conn.commit()
+    
+    def add_mood_entry(self, date, time, mood, reason, comment, rating):
+        """Добавление записи"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            INSERT INTO mood_entries (date, time, mood, reason, comment, rating)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (date, time, mood, reason, comment, rating))
+        self.conn.commit()
+        return cursor.lastrowid
+
+# ДОРАБОТАТЬ: метод get_all_entries для работы с большим кол-вом информации
+# ДОРАБОТАТЬ: метод get_weekly_entries для статистики
+# ДОРАБОТАТЬ: метод get_advice_by_mood для получения советов
+
+class WizardManager(QWidget):
+    def __init__(self, db_manager):
+        super().__init__()
+        self.db_manager = db_manager
+        self.current_step = 0
+        self.setup_ui()  # ДОРАБОТАТЬ: заменить на загрузку из Qt Designer
+    
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        
+        # ДОРАБОТАТЬ: заменить на загрузку UI из Qt Designer
+        self.stack = QStackedWidget()
+        
+        # Шаг 1: Дата и время - ДОРАБОТАТЬ: валидацию ввода
+        step1 = self.create_datetime_step()
+        self.stack.addWidget(step1)
+        
+        # Шаг 2: Настроение - ДОРАБОТАТЬ: кнопки со смайликами
+        step2 = self.create_mood_step()
+        self.stack.addWidget(step2)
+        
+        # Шаг 3: Причина - ДОРАБОТАТЬ: шаблоны частых причин
+        step3 = self.create_reason_step()
+        self.stack.addWidget(step3)
+        
+        # ДОРАБОТАТЬ: Шаг 4: Комментарий - подсказки при вводе
+        
+        # Навигация - ДОРАБОТАТЬ: прогресс шагов
+        nav_layout = self.create_navigation()
+        
+        layout.addWidget(self.stack)
+        layout.addLayout(nav_layout)
+        self.setLayout(layout)
+    
+    def create_datetime_step(self):
+        """Создание шага даты/времени"""
+        step = QWidget()
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("Дата и время записи:"))
+        
+        self.date_edit = QDateEdit()
+        self.date_edit.setDate(QDate.currentDate())
+        self.time_edit = QTimeEdit()
+        self.time_edit.setTime(QTime.currentTime())
+        
+        layout.addWidget(self.date_edit)
+        layout.addWidget(self.time_edit)
+        step.setLayout(layout)
+        return step
+    
+    def create_mood_step(self):
+        """Создание шага выбора настроения - ДОРАБОТАТЬ: графические смайлики"""
+        step = QWidget()
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("Выберите настроение:"))
+        
+        self.mood_combo = QComboBox()
+        self.mood_combo.addItems(["Радостный", "Грустный", "Злой", "Уставший", "Нейтральный"])
+        layout.addWidget(self.mood_combo)
+        
+        step.setLayout(layout)
+        return step
+    
+    def create_reason_step(self):
+        """Создание шага причины"""
+        step = QWidget()
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("Причина настроения:"))
+        
+        self.reason_edit = QTextEdit()
+        self.reason_edit.setMaximumHeight(100)
+        self.reason_edit.setPlaceholderText("Кратко опишите причину...")
+        layout.addWidget(self.reason_edit)
+        
+        step.setLayout(layout)
+        return step
+    
+    # ДОРАБОТАТЬ: метод create_comment_step для создания шага комментария
+    # ДОРАБОТАТЬ: метод create_rating_step для создания шага оценки
+    
+    def create_navigation(self):
+        """Создание навигации - ДОРАБОТАТЬ: иконки для кнопок"""
+        nav_layout = QHBoxLayout()
+        self.prev_btn = QPushButton("Назад")
+        self.next_btn = QPushButton("Вперед")
+        self.finish_btn = QPushButton("Завершить")
+        self.finish_btn.hide()
+        
+        self.prev_btn.clicked.connect(self.previous_step)
+        self.next_btn.clicked.connect(self.next_step)
+        self.finish_btn.clicked.connect(self.finish)
+        
+        nav_layout.addWidget(self.prev_btn)
+        nav_layout.addWidget(self.next_btn)
+        nav_layout.addWidget(self.finish_btn)
+        
+        return nav_layout
+    
+    def next_step(self):
+        """Логика перехода вперед - ДОРАБОТАТЬ: валидацию текущего шага"""
+        if self.current_step < self.stack.count() - 1:
+            self.current_step += 1
+            self.stack.setCurrentIndex(self.current_step)
+        
+        # ДОРАБОТАТЬ: логику отображения кнопки завершения для последнего шага
+    
+    def previous_step(self):
+        """Логика перехода назад"""
+        if self.current_step > 0:
+            self.current_step -= 1
+            self.stack.setCurrentIndex(self.current_step)
+        
+        # ДОРАБОТАТЬ: логику скрытия/показа кнопок при переходе назад
+    
+    def finish(self):
+        """Завершение ввода - ДОРАБОТАТЬ: расширенную валидацию данных"""
+        date = self.date_edit.date().toString('yyyy-MM-dd')
+        time = self.time_edit.time().toString('hh:mm')
+        mood = self.mood_combo.currentText().split(' ')[1].lower()
+        reason = self.reason_edit.toPlainText()
+        
+        # ДОРАБОТАТЬ: получение комментария и оценки
+        
+        try:
+            # ДОРАБОТАТЬ: передать comment и rating в метод add_mood_entry
+            self.db_manager.add_mood_entry(date, time, mood, reason, "", 5)  # временно пустой комментарий и оценка 5
+            QMessageBox.information(self, "Успех", "Запись успешно сохранена!")
+            self.reset_form()
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", f"Ошибка при сохранении: {str(e)}")
+    
+    def reset_form(self):
+        self.current_step = 0
+        self.stack.setCurrentIndex(0)
+        self.date_edit.setDate(QDate.currentDate())
+        self.time_edit.setTime(QTime.currentTime())
+        self.mood_combo.setCurrentIndex(0)
+        self.reason_edit.clear()
+        
+        # ДОРАБОТАТЬ: сброс комментария и оценки
+
+# ДОРАБОТАТЬ: класс HistoryWidget с фильтрацией, поиском, редактированием записей
+# ДОРАБОТАТЬ: класс StatsWidget для статистики и аналитики
+# ДОРАБОТАТЬ: класс ExportManager для экспорта данных
+# ДОРАБОТАТЬ: класс MainWindow с полноценным интерфейсом, меню и вкладками
+
+class MainWindow(QMainWindow):
+    """Главное окно - ДОРАБОТАТЬ: полноценный интерфейс с меню и вкладками"""
+    def __init__(self):
+        super().__init__()
+        self.db_manager = DatabaseManager()
+        self.setup_ui()
+    
+    def setup_ui(self):
+        self.setWindowTitle("Emotional Diary")
+        self.setGeometry(100, 100, 600, 400)
+        
+        # ДОРАБОТАТЬ: добавить вкладки и полноценный интерфейс
+        self.wizard = WizardManager(self.db_manager)
+        self.setCentralWidget(self.wizard)
+
+def main():
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec())
+
+if __name__ == '__main__':
+    main()
